@@ -1,6 +1,6 @@
 # Deboss Stamp Generator
 
-## [Tool running at GitHub pages here] (https://schmidjon.github.io/deboss-stamp-generator/deboss-generator.html)
+## Tool running at GitHub pages here (https://schmidjon.github.io/deboss-stamp-generator/deboss-generator.html)
 
 A single web page that turns an SVG logo into a 3D-printable **debossing stamp** and a matching **cover template (jig)**, for pressing logos into hardcover notebooks with a manual desktop press.
 
