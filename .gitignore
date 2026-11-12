@@ -1,0 +1,23 @@
+# Generated print files (download them from the generator; don't commit them)
+*.stl
+*.3mf
+*.gcode
+*.gcode.3mf
+exports/
+output/
+
+# Local secrets / machine-specific config (keep credentials here, never in code)
+config.local.*
+*.local.json
+.env
+.env.*
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# OS / editor clutter
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/

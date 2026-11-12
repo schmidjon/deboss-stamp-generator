@@ -1,0 +1,758 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deboss Stamp Generator</title>
+<style>
+:root{
+  --bg:#f6f5f2; --panel:#ffffff; --ink:#1d1d1b; --muted:#6b6a66; --line:#dddbd5;
+  --accent:#c4561b; --accent-ink:#fff; --ok:#2f7d4f; --warn:#b4620a; --bad:#b3261e;
+  --cover:#e9e6df; --plate:#9fb3c8; --lip:#5c7a99; --logo:#1d1d1b; --thin:#e0281e; --gap:#f29b18;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#191917; --panel:#232321; --ink:#ecebe7; --muted:#a3a19b; --line:#3a3936;
+    --cover:#2f2e2b; --plate:#4b6178; --lip:#7d9cbb; --logo:#ecebe7;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#191917; --panel:#232321; --ink:#ecebe7; --muted:#a3a19b; --line:#3a3936;
+  --cover:#2f2e2b; --plate:#4b6178; --lip:#7d9cbb; --logo:#ecebe7;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+header{padding:14px 20px;border-bottom:1px solid var(--line);display:flex;gap:16px;align-items:baseline;flex-wrap:wrap}
+header h1{font-size:18px;margin:0}
+header span{color:var(--muted)}
+main{display:grid;grid-template-columns:340px 1fr;min-height:calc(100vh - 52px)}
+aside{border-right:1px solid var(--line);padding:12px 16px 40px;overflow:auto;max-height:calc(100vh - 52px)}
+section.view{padding:16px;display:flex;flex-direction:column;gap:14px;min-width:0}
+fieldset{border:1px solid var(--line);border-radius:8px;margin:0 0 12px;padding:8px 12px 10px;background:var(--panel)}
+legend{font-weight:600;padding:0 4px}
+.row{display:grid;grid-template-columns:1fr 92px 26px;gap:6px;align-items:center;margin:5px 0}
+.row label{font-size:13px}
+.row input[type=number],.row select{width:100%;padding:4px 6px;border:1px solid var(--line);border-radius:5px;background:var(--bg);color:var(--ink);font:inherit}
+.row.wide{grid-template-columns:1fr 1fr}
+.row .unit{color:var(--muted);font-size:12px}
+.check{display:flex;gap:8px;align-items:center;margin:6px 0;font-size:13px}
+button,.btn{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:7px 12px;border-radius:6px;cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+button:disabled{opacity:.45;cursor:not-allowed}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.drop{border:2px dashed var(--line);border-radius:8px;padding:14px;text-align:center;color:var(--muted);cursor:pointer}
+.drop.has{border-style:solid;color:var(--ink)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 12px}
+.card b{display:block;font-size:17px}
+.card small{color:var(--muted)}
+.panels{display:grid;grid-template-columns:1fr 1fr;gap:14px;min-height:460px}
+.pane{background:var(--panel);border:1px solid var(--line);border-radius:8px;display:flex;flex-direction:column;min-height:420px;overflow:hidden}
+.pane h3{margin:0;padding:8px 12px;font-size:14px;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:center}
+.pane h3 .sp{flex:1}
+.tabs button{padding:3px 9px;font-size:12px}
+.tabs button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+#cv2d,#cv3d{flex:1;width:100%;min-height:380px;display:block}
+.legend{display:flex;gap:12px;flex-wrap:wrap;padding:6px 12px;font-size:12px;color:var(--muted);border-top:1px solid var(--line)}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+#msgs{display:flex;flex-direction:column;gap:6px}
+.msg{padding:8px 12px;border-radius:6px;border-left:4px solid var(--muted);background:var(--panel)}
+.msg.ok{border-color:var(--ok)} .msg.warn{border-color:var(--warn)} .msg.bad{border-color:var(--bad)}
+details{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 12px}
+details summary{cursor:pointer;font-weight:600}
+details ol{margin:8px 0 4px;padding-left:20px}
+.hint{color:var(--muted);font-size:12px;margin:4px 0}
+@media (max-width:900px){
+  main{grid-template-columns:1fr} aside{max-height:none;border-right:0;border-bottom:1px solid var(--line)}
+  .panels{grid-template-columns:1fr}
+}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/clipper-lib@6.4.2/clipper.js"></script>
+<script type="importmap">
+{"imports":{
+  "three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+  "earcut":"https://cdn.jsdelivr.net/npm/earcut@2.2.4/+esm",
+  "fflate":"https://cdn.jsdelivr.net/npm/fflate@0.8.2/esm/browser.js"
+}}
+</script>
+</head>
+<body>
+<header>
+  <h1>Deboss Stamp Generator</h1>
+  <span>SVG logo → smooth tapered stamp + drop-on cover template</span>
+</header>
+<main>
+<aside>
+  <fieldset>
+    <legend>Logo</legend>
+    <div class="drop" id="drop">Drop an SVG here or click to choose<input type="file" id="file" accept=".svg,image/svg+xml" hidden></div>
+    <div id="grp-Logo"></div>
+  </fieldset>
+  <fieldset>
+    <legend>Notebook (measure it!)</legend>
+    <div class="row wide"><label for="preset">Preset</label><select id="preset"></select></div>
+    <div id="grp-Notebook"></div>
+    <div class="btns"><button id="savePreset">Save as preset…</button><button id="delPreset">Delete preset</button></div>
+    <p class="hint">Measure the front cover board with calipers: width from the spine edge to the fore-edge, height from bottom to top. Measure a few notebooks and use the largest.</p>
+  </fieldset>
+  <fieldset><legend>Placement on cover</legend><div id="grp-Placement"></div></fieldset>
+  <fieldset><legend>Stamp</legend><div id="grp-Stamp"></div></fieldset>
+  <fieldset><legend>Cover template (jig)</legend><div id="grp-Template"></div></fieldset>
+  <fieldset><legend>Quality &amp; detail check</legend><div id="grp-Quality"></div></fieldset>
+  <fieldset>
+    <legend>Settings</legend>
+    <div class="btns"><button id="saveJson">Save settings file</button><button id="loadJsonBtn">Load settings file</button><input type="file" id="loadJson" accept=".json" hidden><button id="resetDefaults">Reset defaults</button></div>
+  </fieldset>
+</aside>
+<section class="view">
+  <div class="cards" id="cards"></div>
+  <div id="msgs"></div>
+  <div class="btns">
+    <button class="primary" id="dl3mf" disabled>Download both (.3mf)</button>
+    <button id="dlStamp" disabled>Stamp .stl</button>
+    <button id="dlTpl" disabled>Template .stl</button>
+  </div>
+  <div class="panels">
+    <div class="pane">
+      <h3>Cover preview <span class="sp"></span><small style="color:var(--muted);font-weight:400">as seen from above, how it will read</small></h3>
+      <canvas id="cv2d"></canvas>
+      <div class="legend">
+        <span><i class="sw" style="background:var(--cover)"></i>cover</span>
+        <span><i class="sw" style="background:var(--plate)"></i>template plate</span>
+        <span><i class="sw" style="background:var(--lip)"></i>edge lips</span>
+        <span><i class="sw" style="background:var(--logo)"></i>impression</span>
+        <span><i class="sw" style="background:var(--thin)"></i>too-thin line</span>
+        <span><i class="sw" style="background:var(--gap)"></i>too-narrow gap</span>
+      </div>
+    </div>
+    <div class="pane">
+      <h3>3D (print orientation) <span class="sp"></span>
+        <span class="tabs"><button data-v="stamp" class="on">Stamp</button> <button data-v="template">Template</button></span></h3>
+      <canvas id="cv3d"></canvas>
+      <div class="legend"><span>Drag to orbit · scroll to zoom. The stamp prints face-up, so the logo looks mirrored here — that is correct.</span></div>
+    </div>
+  </div>
+  <details open>
+    <summary>Volunteer steps</summary>
+    <ol>
+      <li>Close the notebook, front cover up, on the press bed (white die pad under it).</li>
+      <li>Lay the template on the cover: slide it until the lips touch the <b>fore-edge</b>, and the top and bottom lips hug the cover. The arrow points to the top of the notebook.</li>
+      <li>Turn the stamp logo-side down and drop it in the window, with the key tab in the notch.</li>
+      <li>Centre it under the upper plate and pull the handle down once, firmly, to the stop. Don't press twice.</li>
+      <li>Lift the stamp straight up, then the template. Check the impression.</li>
+    </ol>
+  </details>
+  <details>
+    <summary>Print settings that worked (Bambu H2S, 0.2 nozzle)</summary>
+    <ul>
+      <li>Stamp: print as exported (face up). 0.08–0.12 mm layers, 4+ walls, 40%+ infill so the relief can't crush. Ironing on the top surface optional.</li>
+      <li>Template: 0.2 nozzle or 0.4 nozzle, 0.2 mm layers, default walls. Prints flat with the lips pointing up — no supports.</li>
+      <li>Keep <b>back thickness</b> and <b>relief height</b> the same for every stamp, so the press stop never needs re-setting.</li>
+    </ul>
+  </details>
+</section>
+</main>
+
+<script type="module">
+import * as THREE from 'three';
+import { SVGLoader } from 'three/addons/loaders/SVGLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import earcut from 'earcut';
+import { zipSync, strToU8 } from 'fflate';
+
+const CL = window.ClipperLib;
+const SC = 10000;                     // clipper integer units per mm
+const NZ = CL.PolyFillType.pftNonZero, EO = CL.PolyFillType.pftEvenOdd;
+const CT = CL.ClipType;
+
+/* ---------------------------------------------------------------- params */
+const PARAMS = [
+  {g:'Logo', id:'sizeMode', label:'Size by', type:'select', opts:[['width','Width'],['height','Height']], def:'width'},
+  {g:'Logo', id:'size', label:'Logo size', unit:'mm', def:100, step:0.5, min:5},
+  {g:'Logo', id:'invert', label:'Raise light areas instead of dark', type:'check', def:false},
+  {g:'Logo', id:'grow', label:'Thicken (+) / thin (−) all lines', unit:'mm', def:0, step:0.02},
+  {g:'Notebook', id:'coverW', label:'Cover width', unit:'mm', def:146.24, step:0.01, min:20},
+  {g:'Notebook', id:'coverH', label:'Cover height', unit:'mm', def:212.33, step:0.01, min:20},
+  {g:'Notebook', id:'thick', label:'Closed thickness', unit:'mm', def:15.08, step:0.1, min:3},
+  {g:'Placement', id:'offX', label:'Move right of centre', unit:'mm', def:0, step:0.5},
+  {g:'Placement', id:'offY', label:'Move up from centre', unit:'mm', def:0, step:0.5},
+  {g:'Stamp', id:'shape', label:'Stamp outline', type:'select', opts:[['auto','Auto'],['circle','Circle'],['rrect','Rounded rectangle']], def:'auto'},
+  {g:'Stamp', id:'margin', label:'Border around logo', unit:'mm', def:3, step:0.5, min:0.5},
+  {g:'Stamp', id:'backT', label:'Back thickness', unit:'mm', def:3.8, step:0.5, min:2},
+  {g:'Stamp', id:'reliefH', label:'Relief height', unit:'mm', def:1.2, step:0.1, min:0.3},
+  {g:'Stamp', id:'taper', label:'Wall taper', unit:'°', def:10, step:1, min:0, max:30},
+  {g:'Stamp', id:'step', label:'Taper step height', unit:'mm', def:0.1, step:0.01, min:0.02},
+  {g:'Stamp', id:'tabW', label:'Key tab width', unit:'mm', def:10, step:0.5, min:3},
+  {g:'Stamp', id:'tabD', label:'Key tab length', unit:'mm', def:4, step:0.5, min:1},
+  {g:'Stamp', id:'backArrow', label:'Engrave ↑ arrow on the back', type:'check', def:true},
+  {g:'Template', id:'plateT', label:'Plate thickness', unit:'mm', def:2.4, step:0.2, min:1},
+  {g:'Template', id:'lipD', label:'Edge lip depth', unit:'mm', def:6, step:0.5, min:2},
+  {g:'Template', id:'lipT', label:'Edge lip thickness', unit:'mm', def:2.4, step:0.2, min:1},
+  {g:'Template', id:'coverClr', label:'Clearance to cover edges', unit:'mm', def:0.3, step:0.05, min:0},
+  {g:'Template', id:'winClr', label:'Clearance around stamp', unit:'mm', def:0.25, step:0.05, min:0},
+  {g:'Template', id:'spineClr', label:'Keep clear of spine', unit:'mm', def:8, step:1, min:0},
+  {g:'Template', id:'lighten', label:'Cut away unused plate (less plastic)', type:'check', def:true},
+  {g:'Quality', id:'res', label:'Curve accuracy (max deviation)', unit:'mm', def:0.003, step:0.001, min:0.0005},
+  {g:'Quality', id:'minLine', label:'Flag lines thinner than', unit:'mm', def:0.5, step:0.05, min:0},
+  {g:'Quality', id:'minGap', label:'Flag gaps narrower than', unit:'mm', def:0.5, step:0.05, min:0},
+];
+const BUILTIN_PRESETS = [
+  {name:'LYDTICK A5 hardcover (measured)', coverW:146.24, coverH:212.33, thick:15.08},
+  {name:'A5 nominal 148 × 210', coverW:148, coverH:210, thick:15},
+  {name:'B5 nominal 176 × 250', coverW:176, coverH:250, thick:15},
+  {name:'A6 nominal 105 × 148', coverW:105, coverH:148, thick:12},
+  {name:'5 × 8 in (127 × 203)', coverW:127, coverH:203.2, thick:15},
+];
+const LS_KEY = 'deboss-gen-settings-v4', LS_PRESETS = 'deboss-gen-presets-v1';
+const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+
+const S = {}; // current settings
+function defaults(){ const o={}; for (const p of PARAMS) o[p.id]=p.def; return o; }
+Object.assign(S, defaults(), lsGet(LS_KEY, {}));
+
+function buildForm(){
+  for (const p of PARAMS){
+    const host = document.getElementById('grp-'+p.g);
+    if (p.type === 'check'){
+      const l = document.createElement('label'); l.className='check';
+      l.innerHTML = `<input type="checkbox" id="p-${p.id}"> ${p.label}`;
+      host.appendChild(l);
+    } else {
+      const d = document.createElement('div'); d.className='row';
+      const ctl = p.type==='select'
+        ? `<select id="p-${p.id}">${p.opts.map(o=>`<option value="${o[0]}">${o[1]}</option>`).join('')}</select>`
+        : `<input type="number" id="p-${p.id}" step="${p.step??0.1}" ${p.min!=null?`min="${p.min}"`:''} ${p.max!=null?`max="${p.max}"`:''}>`;
+      d.innerHTML = `<label for="p-${p.id}">${p.label}</label>${ctl}<span class="unit">${p.unit||''}</span>`;
+      host.appendChild(d);
+    }
+    const el = document.getElementById('p-'+p.id);
+    el.addEventListener(p.type==='check'||p.type==='select'?'change':'input', () => {
+      S[p.id] = p.type==='check' ? el.checked : p.type==='select' ? el.value : parseFloat(el.value);
+      if (['coverW','coverH','thick'].includes(p.id)) document.getElementById('preset').value='';
+      lsSet(LS_KEY, S); schedule();
+    });
+  }
+}
+function syncForm(){
+  for (const p of PARAMS){
+    const el = document.getElementById('p-'+p.id);
+    if (p.type==='check') el.checked = !!S[p.id]; else el.value = S[p.id];
+  }
+}
+function allPresets(){ return [...BUILTIN_PRESETS, ...lsGet(LS_PRESETS, []).map(p=>({...p, custom:true}))]; }
+function fillPresets(){
+  const sel = document.getElementById('preset');
+  sel.innerHTML = `<option value="">— custom —</option>` + allPresets().map((p,i)=>`<option value="${i}">${p.custom?'★ ':''}${p.name}</option>`).join('');
+  const i = allPresets().findIndex(p=>p.coverW===S.coverW && p.coverH===S.coverH && p.thick===S.thick);
+  sel.value = i>=0 ? String(i) : '';
+}
+
+/* ---------------------------------------------------------------- clipper helpers */
+function clipOp(type, a, b, fa=NZ, fb=NZ){
+  const c = new CL.Clipper(); c.StrictlySimple = true;
+  if (a && a.length) c.AddPaths(a, CL.PolyType.ptSubject, true);
+  if (b && b.length) c.AddPaths(b, CL.PolyType.ptClip, true);
+  const out = new CL.Paths(); c.Execute(type, out, fa, fb); return out;
+}
+const U = (a,b=[],fa=NZ) => clipOp(CT.ctUnion, a, b, fa, NZ);
+const D = (a,b) => clipOp(CT.ctDifference, a, b);
+const I = (a,b) => clipOp(CT.ctIntersection, a, b);
+function OFF(paths, dmm, arcTolMm=0.004){
+  if (!paths.length || dmm === 0) return paths;
+  const co = new CL.ClipperOffset(2, arcTolMm*SC);
+  co.AddPaths(paths, CL.JoinType.jtRound, CL.EndType.etClosedPolygon);
+  const out = new CL.Paths(); co.Execute(out, dmm*SC); return out;
+}
+function clean(paths, minAreaMm2=0.0004){
+  const c = CL.Clipper.CleanPolygons(paths, 0.0008*SC);
+  return c.filter(p => p.length>=3 && Math.abs(CL.Clipper.Area(p)) > minAreaMm2*SC*SC);
+}
+const areaI = p => CL.Clipper.Area(p)/(SC*SC);
+function boundsI(paths){
+  let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+  for (const p of paths) for (const q of p){ if(q.X<x0)x0=q.X; if(q.X>x1)x1=q.X; if(q.Y<y0)y0=q.Y; if(q.Y>y1)y1=q.Y; }
+  return {x0:x0/SC,y0:y0/SC,x1:x1/SC,y1:y1/SC,w:(x1-x0)/SC,h:(y1-y0)/SC};
+}
+const toI = pts => pts.map(([x,y])=>({X:Math.round(x*SC),Y:Math.round(y*SC)}));
+const fromI = p => p.map(q=>[q.X/SC,q.Y/SC]);
+const xform = (paths, f) => paths.map(p=>p.map(q=>{ const [x,y]=f(q.X/SC,q.Y/SC); return {X:Math.round(x*SC),Y:Math.round(y*SC)}; }));
+function circle(cx,cy,r,seg=0.1){ const n=Math.max(24,Math.ceil(2*Math.PI*r/seg)); const a=[]; for(let i=0;i<n;i++){const t=2*Math.PI*i/n;a.push([cx+r*Math.cos(t),cy+r*Math.sin(t)]);} return toI(a); }
+function rect(x0,y0,x1,y1){ return toI([[x0,y0],[x1,y0],[x1,y1],[x0,y1]]); }
+function arrow(cx,cy,s){ // pointing +y, CCW
+  return toI([[0,s/2],[-s/2,0],[-s/5,0],[-s/5,-s/2],[s/5,-s/2],[s/5,0],[s/2,0]].map(([x,y])=>[cx+x,cy+y]).reverse());
+}
+
+/* ---------------------------------------------------------------- SVG → ink polygons */
+function parseSvg(text){
+  const data = new SVGLoader().parse(text);
+  const items = [];
+  for (const p of data.paths){
+    const st = p.userData?.style || {};
+    if (st.display === 'none' || st.visibility === 'hidden') continue;
+    const op = (st.opacity ?? 1);
+    const fillOn = st.fill && st.fill !== 'none' && st.fill !== 'transparent' && (st.fillOpacity ?? 1) * op > 0.05;
+    const strokeOn = st.stroke && st.stroke !== 'none' && st.stroke !== 'transparent' && (st.strokeOpacity ?? 1) * op > 0.05 && (st.strokeWidth ?? 0) > 0;
+    if (!fillOn && !strokeOn) continue;
+    const lum = s => { const c = new THREE.Color(); try { c.setStyle(s); } catch { return 0; } return 0.2126*c.r+0.7152*c.g+0.0722*c.b; };
+    items.push({
+      subPaths: p.subPaths, fillRule: st.fillRule,
+      fill: fillOn, fillDark: fillOn ? lum(st.fill) < 0.2 : false,
+      stroke: strokeOn, strokeDark: strokeOn ? lum(st.stroke) < 0.2 : false, strokeWidth: st.strokeWidth,
+    });
+  }
+  return items;
+}
+// adaptive flattening: subdivide each Bézier until it deviates from a straight chord by < tol
+function flattenCubic(x0,y0,x1,y1,x2,y2,x3,y3,tol,out,depth=0){
+  const dx=x3-x0, dy=y3-y0, L=Math.hypot(dx,dy);
+  const d1 = L>1e-12 ? Math.abs((x1-x0)*dy-(y1-y0)*dx)/L : Math.hypot(x1-x0,y1-y0);
+  const d2 = L>1e-12 ? Math.abs((x2-x0)*dy-(y2-y0)*dx)/L : Math.hypot(x2-x0,y2-y0);
+  if (depth >= 18 || Math.max(d1,d2) <= tol*1.3){ out.push({x:x3,y:y3}); return; }   // 1.3 ≈ ¾·max ctrl-pt distance bound
+  const ax=(x0+x1)/2, ay=(y0+y1)/2, bx=(x1+x2)/2, by=(y1+y2)/2, cx=(x2+x3)/2, cy=(y2+y3)/2;
+  const abx=(ax+bx)/2, aby=(ay+by)/2, bcx=(bx+cx)/2, bcy=(by+cy)/2, mx=(abx+bcx)/2, my=(aby+bcy)/2;
+  flattenCubic(x0,y0,ax,ay,abx,aby,mx,my,tol,out,depth+1);
+  flattenCubic(mx,my,bcx,bcy,cx,cy,x3,y3,tol,out,depth+1);
+}
+function sampleSub(sp, tol){
+  const pts = [];
+  for (const c of sp.curves){
+    let arr;
+    if (c.isLineCurve) arr = [c.v1, c.v2];
+    else if (c.isCubicBezierCurve){ arr = [c.v0]; flattenCubic(c.v0.x,c.v0.y,c.v1.x,c.v1.y,c.v2.x,c.v2.y,c.v3.x,c.v3.y,tol,arr); }
+    else if (c.isQuadraticBezierCurve){ const {v0,v1,v2}=c; arr=[v0];
+      flattenCubic(v0.x,v0.y, v0.x+2/3*(v1.x-v0.x),v0.y+2/3*(v1.y-v0.y), v2.x+2/3*(v1.x-v2.x),v2.y+2/3*(v1.y-v2.y), v2.x,v2.y, tol, arr); }
+    else {
+      const r = c.isEllipseCurve ? Math.max(1e-9, Math.min(Math.abs(c.xRadius), Math.abs(c.yRadius))) : tol*50;
+      const seg = Math.sqrt(8*r*tol);
+      arr = c.getPoints(Math.max(4, Math.min(20000, Math.ceil(c.getLength()/seg))));
+    }
+    for (const v of arr){ const l = pts[pts.length-1]; if (!l || Math.abs(l.x-v.x)+Math.abs(l.y-v.y) > 1e-9) pts.push(v); }
+  }
+  if (pts.length > 1){ const f=pts[0], l=pts[pts.length-1]; if (Math.abs(f.x-l.x)+Math.abs(f.y-l.y) < 1e-9) pts.pop(); }
+  return pts;
+}
+// paint-order composite: dark shapes add ink, light shapes erase it (or the reverse when inverted)
+function composite(items, tol, tf, k, invert){
+  // 1) each painted shape on its own, in paint order
+  const ops = [];
+  for (const it of items){
+    if (it.fill){
+      const paths = it.subPaths.map(sp=>sampleSub(sp,tol)).filter(p=>p.length>=3).map(p=>p.map(v=>tf(v.x,v.y)));
+      ops.push({ink: it.fillDark !== invert, shape: U(paths, [], it.fillRule==='evenodd' ? EO : NZ)});
+    }
+    if (it.stroke){
+      const co = new CL.ClipperOffset(2, 0.004*SC);
+      for (const sp of it.subPaths){
+        const p = sampleSub(sp, tol); if (p.length < 2) continue;
+        co.AddPath(p.map(v=>tf(v.x,v.y)), CL.JoinType.jtRound, sp.autoClose ? CL.EndType.etClosedLine : CL.EndType.etOpenRound);
+      }
+      const out = new CL.Paths(); co.Execute(out, it.strokeWidth*k/2);
+      ops.push({ink: it.strokeDark !== invert, shape: out});
+    }
+  }
+  // 2) consecutive shapes of the same kind are merged in one boolean op (much faster than one-by-one)
+  let res = [];
+  for (let i=0;i<ops.length;){
+    let j=i; const batch=[];
+    while (j<ops.length && ops[j].ink===ops[i].ink){ batch.push(...ops[j].shape); j++; }
+    if (ops[i].ink) res = U(res, batch); else if (res.length) res = D(res, batch);
+    i=j;
+  }
+  return res;
+}
+// returns logo polygons in mm, centred on the ink bounding box, y up, reading correctly (not mirrored)
+function logoPolys(items, s){
+  // pass 1: coarse, to find the ink bounding box
+  let raw = {x0:Infinity,y0:Infinity,x1:-Infinity,y1:-Infinity};
+  for (const it of items) for (const sp of it.subPaths) for (const v of sampleSub(sp, 1e9)){ raw.x0=Math.min(raw.x0,v.x);raw.x1=Math.max(raw.x1,v.x);raw.y0=Math.min(raw.y0,v.y);raw.y1=Math.max(raw.y1,v.y); }
+  const rawMax = Math.max(raw.x1-raw.x0, raw.y1-raw.y0) || 1;
+  const k1 = 1e6/rawMax;
+  const coarse = composite(items, rawMax/3000, (x,y)=>({X:Math.round(x*k1),Y:Math.round(y*k1)}), k1, s.invert);
+  if (!coarse.length) throw new Error(s.invert ? 'No light filled shapes found in the SVG.' : 'No dark filled shapes found in the SVG. Try "Raise light areas instead of dark".');
+  let b = {x0:Infinity,y0:Infinity,x1:-Infinity,y1:-Infinity};
+  for (const p of coarse) for (const q of p){ b.x0=Math.min(b.x0,q.X/k1);b.x1=Math.max(b.x1,q.X/k1);b.y0=Math.min(b.y0,q.Y/k1);b.y1=Math.max(b.y1,q.Y/k1); }
+  const cx=(b.x0+b.x1)/2, cy=(b.y0+b.y1)/2;
+  const scale = s.size / (s.sizeMode==='height' ? (b.y1-b.y0) : (b.x1-b.x0));   // mm per svg unit
+  // pass 2: fine, in mm
+  const k = scale*SC;
+  let P = composite(items, s.res/scale, (x,y)=>({X:Math.round((x-cx)*k),Y:Math.round(-(y-cy)*k)}), k, s.invert);
+  P = U(P);
+  if (s.grow) P = OFF(P, s.grow);
+  // exact re-centre after fine pass
+  const bb = boundsI(P); const dx=(bb.x0+bb.x1)/2, dy=(bb.y0+bb.y1)/2;
+  P = xform(P, (x,y)=>[x-dx,y-dy]);
+  return clean(P);
+}
+
+/* ---------------------------------------------------------------- mesh building */
+const shoelace = pts => { let a=0; for (let i=0,n=pts.length;i<n;i++){const p=pts[i],q=pts[(i+1)%n]; a+=p[0]*q[1]-q[0]*p[1];} return a/2; };
+function pip(pt, poly){ let inside=false; const [x,y]=pt; for (let i=0,j=poly.length-1;i<poly.length;j=i++){ const [xi,yi]=poly[i],[xj,yj]=poly[j]; if ((yi>y)!==(yj>y) && x < (xj-xi)*(y-yi)/(yj-yi)+xi) inside=!inside; } return inside; }
+function bbox(pts){ let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity; for(const [x,y] of pts){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;} return [x0,y0,x1,y1]; }
+
+/* layers: [{z0,z1,contours:[[ [x,y],… ],…]}] bottom→top. Each contour: outer CCW, hole CW.
+   Adjacent layers must be strictly nested (one region inside the other); identical contour
+   objects shared by two adjacent layers become one continuous wall. Result is watertight. */
+function buildStack(layers){
+  const V = [], T = [];
+  const cache = new Map();
+  const idx = (c, z) => { let m = cache.get(c); if (!m){ m = new Map(); cache.set(c, m); } let a = m.get(z); if (!a){ a = c.map(p=>{ V.push(p[0],p[1],z); return V.length/3-1; }); m.set(z,a); } return a; };
+  for (const L of layers) for (const c of L.contours){
+    const a = idx(c, L.z0), b = idx(c, L.z1), n = c.length;
+    for (let i=0;i<n;i++){ const j=(i+1)%n; T.push(a[i],a[j],b[j], a[i],b[j],b[i]); }
+  }
+  const face = (entries, z, up) => {
+    const its = entries.map(({c,rev})=>{ const pts = rev ? c.slice().reverse() : c; const ids0 = idx(c,z); const ids = rev ? ids0.slice().reverse() : ids0; return {pts, ids, a: shoelace(pts), bb: bbox(pts)}; });
+    const groups = its.filter(i=>i.a>0).sort((p,q)=>p.a-q.a).map(o=>({o, holes:[]}));
+    for (const h of its.filter(i=>i.a<0)){
+      const p = h.pts[0];
+      const g = groups.find(g=>p[0]>=g.o.bb[0]&&p[0]<=g.o.bb[2]&&p[1]>=g.o.bb[1]&&p[1]<=g.o.bb[3]&&pip(p,g.o.pts));
+      if (g) g.holes.push(h);
+    }
+    for (const g of groups){
+      const flat = [], ids = [], hi = [];
+      const add = it => { for (let i=0;i<it.pts.length;i++){ flat.push(it.pts[i][0], it.pts[i][1]); ids.push(it.ids[i]); } };
+      add(g.o); for (const h of g.holes){ hi.push(ids.length); add(h); }
+      const tri = earcut(flat, hi, 2);
+      // earcut winds every triangle the same way; decide the flip once from the total area
+      // (deciding per triangle would mis-orient zero-area slivers and open the mesh)
+      let sum = 0;
+      for (let t=0;t<tri.length;t+=3){ const i0=tri[t],i1=tri[t+1],i2=tri[t+2];
+        sum += (flat[i1*2]-flat[i0*2])*(flat[i2*2+1]-flat[i0*2+1]) - (flat[i1*2+1]-flat[i0*2+1])*(flat[i2*2]-flat[i0*2]); }
+      const flip = (sum > 0) !== up;
+      for (let t=0;t<tri.length;t+=3) flip ? T.push(ids[tri[t]], ids[tri[t+2]], ids[tri[t+1]]) : T.push(ids[tri[t]], ids[tri[t+1]], ids[tri[t+2]]);
+    }
+  };
+  const total = cs => cs.reduce((s,c)=>s+shoelace(c),0);
+  face(layers[0].contours.map(c=>({c,rev:false})), layers[0].z0, false);
+  const last = layers[layers.length-1];
+  face(last.contours.map(c=>({c,rev:false})), last.z1, true);
+  for (let k=0;k<layers.length-1;k++){
+    const lo = layers[k], hi = layers[k+1], z = lo.z1;
+    const shared = new Set(lo.contours.filter(c=>hi.contours.includes(c)));
+    const A = lo.contours.filter(c=>!shared.has(c)), B = hi.contours.filter(c=>!shared.has(c));
+    if (total(lo.contours) >= total(hi.contours)) face([...A.map(c=>({c,rev:false})), ...B.map(c=>({c,rev:true}))], z, true);
+    else face([...B.map(c=>({c,rev:false})), ...A.map(c=>({c,rev:true}))], z, false);
+  }
+  fixTJunctions(V, T);
+  return { pos: new Float32Array(V), idx: new Uint32Array(T) };
+}
+/* Where a rounded offset corner lands exactly in line with a neighbouring edge, earcut can
+   produce a triangle whose edge runs straight through another vertex (a T-junction). Find
+   unmatched edges and split their triangle at the vertex lying on them. */
+function fixTJunctions(V, T){
+  for (let pass=0; pass<6; pass++){
+    const n = V.length/3, edge = new Map();
+    for (let t=0;t<T.length;t+=3) for (let e=0;e<3;e++) edge.set(T[t+e]*n + T[t+(e+1)%3], t);
+    const loose = [], lv = new Set();
+    for (const [k,t] of edge){ const a=Math.floor(k/n), b=k-a*n; if (!edge.has(b*n+a)){ loose.push([a,b,t]); lv.add(a); lv.add(b); } }
+    if (!loose.length) return;
+    const verts = [...lv], done = new Set(); let changed = false;
+    for (const [a,b,t] of loose){
+      if (done.has(t)) continue;
+      const ax=V[a*3], ay=V[a*3+1], az=V[a*3+2], dx=V[b*3]-ax, dy=V[b*3+1]-ay, L2=dx*dx+dy*dy;
+      if (L2 < 1e-14 || Math.abs(V[b*3+2]-az) > 1e-6) continue;
+      let best=-1, bs=1;
+      for (const c of verts){
+        if (c===a || c===b || Math.abs(V[c*3+2]-az) > 1e-6) continue;
+        const cx=V[c*3]-ax, cy=V[c*3+1]-ay, s=(cx*dx+cy*dy)/L2;
+        if (s <= 1e-9 || s >= bs) continue;
+        if (Math.abs(cx*dy-cy*dx)/Math.sqrt(L2) > 2e-5) continue;
+        best=c; bs=s;
+      }
+      if (best < 0) continue;
+      let i=0; while (!(T[t+i]===a && T[t+(i+1)%3]===b)) i++;
+      const x = T[t+(i+2)%3];
+      T[t]=a; T[t+1]=best; T[t+2]=x; T.push(best, b, x);
+      done.add(t); changed = true;
+    }
+    if (!changed) return;
+  }
+}
+function contoursOf(pathsI){ // float contours with outer CCW / hole CW (clipper output already is)
+  return clean(pathsI).map(fromI);
+}
+function meshCheck(m){
+  const n = m.pos.length/3, cnt = new Map();
+  for (let t=0;t<m.idx.length;t+=3) for (let e=0;e<3;e++){ const a=m.idx[t+e], b=m.idx[t+(e+1)%3]; const k=a*n+b; cnt.set(k,(cnt.get(k)||0)+1); }
+  let bad = 0;
+  for (const [k,v] of cnt){ const a=Math.floor(k/n), b=k%n; if (v!==1 || cnt.get(b*n+a)!==1) bad++; }
+  return { tris: m.idx.length/3, badEdges: bad };
+}
+function meshVolume(m){ let v=0; const P=m.pos; for (let t=0;t<m.idx.length;t+=3){ const a=m.idx[t]*3,b=m.idx[t+1]*3,c=m.idx[t+2]*3;
+  v += (P[a]*(P[b+1]*P[c+2]-P[b+2]*P[c+1]) - P[a+1]*(P[b]*P[c+2]-P[b+2]*P[c]) + P[a+2]*(P[b]*P[c+1]-P[b+1]*P[c]))/6; } return v; }
+function transformMesh(m, f){ const p = new Float32Array(m.pos.length); for (let i=0;i<p.length;i+=3){ const r=f(m.pos[i],m.pos[i+1],m.pos[i+2]); p[i]=r[0];p[i+1]=r[1];p[i+2]=r[2]; } return {pos:p, idx:m.idx}; }
+function meshBounds(m){ const b=[Infinity,Infinity,Infinity,-Infinity,-Infinity,-Infinity]; for(let i=0;i<m.pos.length;i+=3) for(let a=0;a<3;a++){ b[a]=Math.min(b[a],m.pos[i+a]); b[a+3]=Math.max(b[a+3],m.pos[i+a]); } return b; }
+
+/* ---------------------------------------------------------------- generator */
+function generate(items, s){
+  const msgs = [];
+  const P = logoPolys(items, s);                  // impression, reads correctly, centred at 0,0
+  const lb = boundsI(P);
+  const H = s.reliefH, tanA = Math.tan(s.taper*Math.PI/180);
+  const N = s.taper > 0 ? Math.max(1, Math.round(H / s.step)) : 1;
+  const dz = H / N;
+  const maxSpread = (N-1)*dz*tanA;
+
+  // stamp outline (centred on logo), symmetric about x so mirroring doesn't matter
+  const margin = Math.max(s.margin, maxSpread + 0.8);
+  let rMax = 0; for (const p of P) for (const q of p) rMax = Math.max(rMax, Math.hypot(q.X,q.Y)/SC);
+  const isRound = Math.abs(lb.w-lb.h)/Math.max(lb.w,lb.h) < 0.06 && rMax <= 0.5*Math.max(lb.w,lb.h)*1.03;
+  const shape = s.shape==='auto' ? (isRound ? 'circle' : 'rrect') : s.shape;
+  let Bbase, topY;
+  if (shape==='circle'){ const R = rMax + margin; Bbase = [circle(0,0,R)]; topY = R; }
+  else { const hw = lb.w/2+margin, hh = lb.h/2+margin, r = Math.min(4, hw, hh);
+         Bbase = OFF([rect(-hw+r,-hh+r,hw-r,hh-r)], r); topY = hh; }
+  const Bi = clean(U(Bbase, [rect(-s.tabW/2, topY-2, s.tabW/2, topY+s.tabD)]));
+  const Bc = contoursOf(Bi);
+
+  // ---- stamp (print orientation: back on bed, relief up, logo mirrored)
+  const Pm = U(xform(P, (x,y)=>[-x,y]));
+  const layers = [];
+  const back = s.backT;
+  if (s.backArrow){
+    const a = Math.min(14, (shape==='circle' ? topY : Math.min(lb.w,lb.h)/2) * 0.35);
+    const ar = fromI(arrow(0, 0, a)).reverse();       // CW = hole
+    layers.push({z0:0, z1:0.6, contours:[...Bc, ar]});
+    layers.push({z0:0.6, z1:back, contours:Bc});
+  } else layers.push({z0:0, z1:back, contours:Bc});
+  for (let i=N-1;i>=0;i--){
+    const Si = i===0 ? Pm : OFF(Pm, i*dz*tanA);
+    layers.push({z0: back + (N-1-i)*dz, z1: back + (N-i)*dz, contours: contoursOf(Si)});
+  }
+  const stamp = buildStack(layers);
+
+  // ---- template (built in use frame: cover origin at spine/bottom corner, lips hang down)
+  const W = s.coverW, Hc = s.coverH, c = s.coverClr, lt = s.lipT, ledge = 0.4;
+  const cx = W/2 + s.offX, cy = Hc/2 + s.offY;
+  const Buse = xform(Bi, (x,y)=>[x+cx,y+cy]);
+  const win = OFF(Buse, s.winClr);
+  const wb = boundsI(win);
+  const xs = Math.max(0, Math.min(s.spineClr, wb.x0 - 8));
+  const X1 = W + c + lt, Y0 = -c - lt, Y1 = Hc + c + lt;
+  const plateRect = [rect(xs, Y0, X1, Y1)];
+  let lips = U([
+    rect(W+c, Y0+ledge, X1-ledge, Y1-ledge),
+    rect(xs+ledge, Y0+ledge, X1-ledge, -c),
+    rect(xs+ledge, Hc+c, X1-ledge, Y1-ledge),
+  ]);
+  lips = D(lips, [circle(W+c, -c, 1.0), circle(W+c, Hc+c, 1.0)]);   // corner reliefs so the cover corner seats
+  const arrowSize = 10, arrowY = Math.min(Hc - 8, wb.y1 + 14);
+  const arrowHole = arrow(cx, arrowY, arrowSize);
+  let plate = D(plateRect, [...win, arrowHole]);
+  if (s.lighten){
+    const border = lt + c + 10;
+    const inner = [rect(xs + 10, Y0 + border, X1 - border, Y1 - border)];
+    const keep = U([
+      ...OFF(win, 10),
+      rect(cx - 8, Y0, cx + 8, Y1),               // vertical bar
+      rect(xs, cy - 8, X1, cy + 8),               // horizontal bar
+      circle(cx, arrowY, arrowSize*0.5 + 6),      // material around the arrow
+    ]);
+    plate = D(plate, OFF(OFF(D(inner, keep), -3), 3));   // round the cut-out corners
+  }
+  plate = clean(plate);
+  const tplUse = buildStack([
+    {z0:-s.lipD, z1:0, contours: contoursOf(lips)},
+    {z0:0, z1:s.plateT, contours: contoursOf(plate)},
+  ]);
+  // print orientation: flip over (rotate 180° about Y) so the plate is on the bed and the lips point up
+  const template = transformMesh(tplUse, (x,y,z)=>[-x, y, s.plateT - z]);
+
+  // ---- detail check on the impression
+  // morphological opening/closing; ignore the tiny slivers every sharp corner produces
+  const real = w => p => { const b = boundsI([p]); return Math.abs(areaI(p)) > 0.25*w*w && Math.max(b.w, b.h) > 1.6*w; };
+  const thin = s.minLine > 0 ? D(P, OFF(OFF(P, -s.minLine/2), s.minLine/2)).filter(real(s.minLine)) : [];
+  const gaps = s.minGap > 0 ? D(OFF(OFF(P, s.minGap/2), -s.minGap/2), P).filter(real(s.minGap)) : [];
+
+  // ---- checks
+  const sc = meshCheck(stamp), tc = meshCheck(template);
+  if (sc.badEdges || tc.badEdges) msgs.push(['bad', `Mesh check found ${sc.badEdges+tc.badEdges} open edges — the slicer will probably repair them, but please report this.`]);
+  else msgs.push(['ok', `Both meshes are watertight (stamp ${sc.tris.toLocaleString()} triangles, template ${tc.tris.toLocaleString()}).`]);
+  if (thin.length) msgs.push(['warn', `${thin.length} spot(s) have lines thinner than ${s.minLine} mm (red). They may not press cleanly — consider a bigger logo or “Thicken”.`]);
+  if (gaps.length) msgs.push(['warn', `${gaps.length} spot(s) have gaps narrower than ${s.minGap} mm (orange). The cover may fill these in.`]);
+  if (!thin.length && !gaps.length) msgs.push(['ok', `No lines thinner than ${s.minLine} mm or gaps narrower than ${s.minGap} mm.`]);
+  if (wb.x0 < 0 || wb.y0 < 0 || wb.x1 > W || wb.y1 > Hc) msgs.push(['bad', 'The stamp doesn’t fit on the cover at this size/position.']);
+  else if (wb.x0 < 6 || wb.y0 < 6 || wb.x1 > W - 6 || wb.y1 > Hc - 6) msgs.push(['warn', 'The stamp is within 6 mm of a cover edge.']);
+  if (s.lipD > s.thick - 3) msgs.push(['warn', `Lip depth (${s.lipD} mm) is close to the notebook thickness — the lips may hit the press bed.`]);
+  if (back + H < s.plateT + 2) msgs.push(['bad', 'The stamp is not much taller than the template plate — the press would hit the template.']);
+  if (margin > s.margin) msgs.push(['warn', `Border increased to ${margin.toFixed(1)} mm so the tapered relief fits on the stamp.`]);
+
+  return { P, lb, shape, stamp, template, tplUse, lips, plate, win, Buse, thin, gaps, msgs, N,
+           stats: { logoW: lb.w, logoH: lb.h, stampW: boundsI(Bi).w, stampH: boundsI(Bi).h, stampT: back+H, tplW: X1-xs, tplH: Y1-Y0,
+                    stampVol: meshVolume(stamp)/1000, tplVol: meshVolume(template)/1000 } };
+}
+
+/* ---------------------------------------------------------------- export */
+function stlBinary(m, name){
+  const nt = m.idx.length/3, buf = new ArrayBuffer(84 + nt*50), dv = new DataView(buf);
+  const hdr = ('deboss-generator ' + name).slice(0,80); for (let i=0;i<hdr.length;i++) dv.setUint8(i, hdr.charCodeAt(i));
+  dv.setUint32(80, nt, true);
+  const P = m.pos; let o = 84;
+  for (let t=0;t<m.idx.length;t+=3){
+    const a=m.idx[t]*3,b=m.idx[t+1]*3,c=m.idx[t+2]*3;
+    const ux=P[b]-P[a],uy=P[b+1]-P[a+1],uz=P[b+2]-P[a+2],vx=P[c]-P[a],vy=P[c+1]-P[a+1],vz=P[c+2]-P[a+2];
+    let nx=uy*vz-uz*vy, ny=uz*vx-ux*vz, nz=ux*vy-uy*vx; const l=Math.hypot(nx,ny,nz)||1;
+    dv.setFloat32(o,nx/l,true);dv.setFloat32(o+4,ny/l,true);dv.setFloat32(o+8,nz/l,true); o+=12;
+    for (const q of [a,b,c]){ dv.setFloat32(o,P[q],true);dv.setFloat32(o+4,P[q+1],true);dv.setFloat32(o+8,P[q+2],true); o+=12; }
+    o+=2;
+  }
+  return new Uint8Array(buf);
+}
+function centreOnBed(m){ const b = meshBounds(m); const cx=(b[0]+b[3])/2, cy=(b[1]+b[4])/2; return transformMesh(m,(x,y,z)=>[x-cx,y-cy,z-b[2]]); }
+function threeMF(objs){
+  const parts = [];
+  let id = 1;
+  const res = [], build = [];
+  for (const o of objs){
+    const v = [], t = [];
+    for (let i=0;i<o.mesh.pos.length;i+=3) v.push(`<vertex x="${o.mesh.pos[i].toFixed(4)}" y="${o.mesh.pos[i+1].toFixed(4)}" z="${o.mesh.pos[i+2].toFixed(4)}"/>`);
+    for (let i=0;i<o.mesh.idx.length;i+=3) t.push(`<triangle v1="${o.mesh.idx[i]}" v2="${o.mesh.idx[i+1]}" v3="${o.mesh.idx[i+2]}"/>`);
+    res.push(`<object id="${id}" name="${o.name}" type="model"><mesh><vertices>${v.join('')}</vertices><triangles>${t.join('')}</triangles></mesh></object>`);
+    build.push(`<item objectid="${id}" transform="1 0 0 0 1 0 0 0 1 ${(o.x||0).toFixed(3)} ${(o.y||0).toFixed(3)} 0"/>`);
+    id++;
+  }
+  const model = `<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"><metadata name="Application">Deboss Stamp Generator</metadata><resources>${res.join('')}</resources><build>${build.join('')}</build></model>`;
+  return zipSync({
+    '[Content_Types].xml': strToU8(`<?xml version="1.0" encoding="UTF-8"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>`),
+    '_rels/.rels': strToU8(`<?xml version="1.0" encoding="UTF-8"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>`),
+    '3D/3dmodel.model': strToU8(model),
+  }, { level: 6 });
+}
+function download(bytes, name, type){
+  const url = URL.createObjectURL(new Blob([bytes], {type}));
+  const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 2000);
+}
+
+/* ---------------------------------------------------------------- 2D preview */
+const cv2 = document.getElementById('cv2d');
+function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+function draw2d(){
+  const r = cv2.getBoundingClientRect(), dpr = devicePixelRatio || 1;
+  cv2.width = r.width*dpr; cv2.height = r.height*dpr;
+  const g = cv2.getContext('2d'); g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,r.width,r.height);
+  const s = S, W = s.coverW, Hc = s.coverH;
+  const pad = 16, sc = Math.min((r.width-2*pad)/(W+12), (r.height-2*pad)/(Hc+12));
+  const ox = (r.width - W*sc)/2, oy = (r.height + Hc*sc)/2;
+  const X = x => ox + x*sc, Y = y => oy - y*sc;
+  const path = (paths, dx=0, dy=0) => { const p = new Path2D(); for (const c of paths){ c.forEach((q,i)=>{ const x=X(q.X/SC+dx), y=Y(q.Y/SC+dy); i?p.lineTo(x,y):p.moveTo(x,y); }); p.closePath(); } return p; };
+  g.fillStyle = css('--cover'); g.fillRect(X(0), Y(Hc), W*sc, Hc*sc);
+  g.fillStyle = css('--muted'); g.font = '11px sans-serif'; g.save(); g.translate(X(0)-4, Y(Hc/2)); g.rotate(-Math.PI/2); g.textAlign='center'; g.fillText('spine', 0, 0); g.restore();
+  if (!R) return;
+  g.globalAlpha = 0.55; g.fillStyle = css('--plate'); g.fill(path(R.plate), 'evenodd');
+  g.globalAlpha = 0.9; g.fillStyle = css('--lip'); g.fill(path(R.lips), 'evenodd'); g.globalAlpha = 1;
+  g.strokeStyle = css('--lip'); g.lineWidth = 1; g.stroke(path(R.win));
+  const cx = W/2 + s.offX, cy = Hc/2 + s.offY;
+  g.fillStyle = css('--logo'); g.fill(path(R.P, cx, cy), 'evenodd');
+  g.fillStyle = css('--thin'); g.fill(path(R.thin, cx, cy), 'evenodd');
+  g.fillStyle = css('--gap'); g.fill(path(R.gaps, cx, cy), 'evenodd');
+  // flag markers so tiny spots are visible
+  for (const [set, col] of [[R.thin,'--thin'],[R.gaps,'--gap']]){
+    g.strokeStyle = css(col); g.lineWidth = 1.5;
+    for (const p of set){ const b = boundsI([p]); g.beginPath(); g.arc(X((b.x0+b.x1)/2+cx), Y((b.y0+b.y1)/2+cy), 6, 0, 7); g.stroke(); }
+  }
+}
+
+/* ---------------------------------------------------------------- 3D preview */
+const cv3 = document.getElementById('cv3d');
+const renderer = new THREE.WebGLRenderer({canvas: cv3, antialias: true, alpha: true});
+const scene = new THREE.Scene();
+const cam = new THREE.PerspectiveCamera(35, 1, 1, 5000);
+const ctl = new OrbitControls(cam, cv3);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x666666, 1.6));
+const dl = new THREE.DirectionalLight(0xffffff, 1.6); dl.position.set(80,-120,200); scene.add(dl);
+const dl2 = new THREE.DirectionalLight(0xffffff, 0.6); dl2.position.set(-150,100,60); scene.add(dl2);
+let view = 'stamp', meshObj = null, lastFitKey = '';
+function show3d(){
+  if (!R) return;
+  const m = centreOnBed(view==='stamp' ? R.stamp : R.template);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(m.pos, 3)); geo.setIndex(new THREE.BufferAttribute(m.idx, 1));
+  const flat = geo.toNonIndexed(); flat.computeVertexNormals();
+  if (meshObj){ scene.remove(meshObj); meshObj.geometry.dispose(); }
+  meshObj = new THREE.Mesh(flat, new THREE.MeshStandardMaterial({color: view==='stamp'?0xd9d4c7:0x8fb0d3, roughness:.55, metalness:0}));
+  scene.add(meshObj);
+  const b = meshBounds(m), size = Math.max(b[3]-b[0], b[4]-b[1]);
+  const key = view + Math.round(size);
+  if (key !== lastFitKey){ lastFitKey = key; cam.up.set(0,0,1); cam.position.set(0, -size*1.2, size*1.1); ctl.target.set(0,0,(b[5]-b[2])/2); ctl.update(); }
+}
+function resize3d(){ const r = cv3.getBoundingClientRect(); renderer.setPixelRatio(devicePixelRatio||1); renderer.setSize(r.width, r.height, false); cam.aspect = r.width/r.height; cam.updateProjectionMatrix(); }
+(function loop(){ requestAnimationFrame(loop); renderer.render(scene, cam); })();
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{ document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('on',x===b)); view=b.dataset.v; show3d(); });
+new ResizeObserver(()=>{ resize3d(); draw2d(); }).observe(document.querySelector('.panels'));
+
+/* ---------------------------------------------------------------- app */
+let svgItems = null, svgName = 'logo', R = null, timer = 0;
+function schedule(){ clearTimeout(timer); timer = setTimeout(run, 250); }
+function setMsgs(list){ document.getElementById('msgs').innerHTML = list.map(([k,t])=>`<div class="msg ${k}">${t}</div>`).join(''); }
+function run(){
+  draw2d();
+  if (!svgItems){ setMsgs([['warn','Load an SVG logo to start.']]); return; }
+  const t0 = performance.now();
+  try { R = generate(svgItems, {...S}); }
+  catch(e){ R = null; console.error(e); setMsgs([['bad', 'Could not generate: ' + e.message]]); draw2d(); updateButtons(); return; }
+  const st = R.stats, f = x => x.toFixed(1);
+  document.getElementById('cards').innerHTML = [
+    ['Impression', `${f(st.logoW)} × ${f(st.logoH)} mm`, 'as it lands on the cover'],
+    ['Stamp', `${f(st.stampW)} × ${f(st.stampH)} × ${f(st.stampT)} mm`, `${R.shape==='circle'?'round':'rounded rect'}, ${R.N} taper steps, ≈${(st.stampVol*1.24).toFixed(0)} g PLA`],
+    ['Template', `${f(st.tplW)} × ${f(st.tplH)} mm`, `≈${(st.tplVol*1.24).toFixed(0)} g PLA`],
+    ['Press stop', `${f(st.stampT)} mm`, 'stamp height — keep it the same for every stamp'],
+  ].map(([a,b,c])=>`<div class="card"><small>${a}</small><b>${b}</b><small>${c}</small></div>`).join('');
+  setMsgs([...R.msgs, ['ok', `Generated in ${Math.round(performance.now()-t0)} ms.`]]);
+  draw2d(); show3d(); updateButtons();
+}
+function updateButtons(){ for (const id of ['dl3mf','dlStamp','dlTpl']) document.getElementById(id).disabled = !R; }
+function baseName(){ return `${svgName}_${Math.round(S.size)}mm`; }
+document.getElementById('dlStamp').onclick = () => download(stlBinary(centreOnBed(R.stamp), 'stamp'), baseName()+'_stamp.stl', 'model/stl');
+document.getElementById('dlTpl').onclick = () => download(stlBinary(centreOnBed(R.template), 'template'), `${baseName()}_template_${S.coverW}x${S.coverH}.stl`, 'model/stl');
+document.getElementById('dl3mf').onclick = () => {
+  const a = centreOnBed(R.stamp), b = centreOnBed(R.template), ba = meshBounds(a), bb = meshBounds(b);
+  const gap = 10, wa = ba[3]-ba[0], wb = bb[3]-bb[0], x0 = -(wa+wb+gap)/2;
+  download(threeMF([
+    {name: baseName()+'_stamp', mesh: a, x: x0 + wa/2},
+    {name: baseName()+'_template', mesh: b, x: x0 + wa + gap + wb/2},
+  ]), baseName()+'_stamp+template.3mf', 'model/3mf');
+};
+
+async function loadSvgText(text, name){
+  try { svgItems = parseSvg(text); svgName = (name||'logo').replace(/\.svg$/i,'').replace(/[^\w-]+/g,'_'); }
+  catch(e){ svgItems = null; setMsgs([['bad','Could not read that SVG: '+e.message]]); return; }
+  const d = document.getElementById('drop'); d.classList.add('has'); d.firstChild.textContent = `${name} — click or drop to replace`;
+  run();
+}
+const drop = document.getElementById('drop'), file = document.getElementById('file');
+drop.onclick = () => file.click();
+file.onchange = async () => { const f = file.files[0]; if (f) loadSvgText(await f.text(), f.name); };
+drop.ondragover = e => { e.preventDefault(); };
+drop.ondrop = async e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) loadSvgText(await f.text(), f.name); };
+
+document.getElementById('preset').onchange = e => {
+  const p = allPresets()[+e.target.value]; if (!p) return;
+  S.coverW = p.coverW; S.coverH = p.coverH; S.thick = p.thick; syncForm(); lsSet(LS_KEY, S); schedule();
+};
+document.getElementById('savePreset').onclick = () => {
+  const name = prompt('Name for this notebook preset:', `My notebook ${S.coverW} × ${S.coverH}`); if (!name) return;
+  const list = lsGet(LS_PRESETS, []).filter(p=>p.name!==name); list.push({name, coverW:S.coverW, coverH:S.coverH, thick:S.thick});
+  lsSet(LS_PRESETS, list); fillPresets();
+};
+document.getElementById('delPreset').onclick = () => {
+  const p = allPresets()[+document.getElementById('preset').value];
+  if (!p || !p.custom){ alert('Pick one of your saved (★) presets to delete.'); return; }
+  lsSet(LS_PRESETS, lsGet(LS_PRESETS, []).filter(q=>q.name!==p.name)); fillPresets();
+};
+document.getElementById('saveJson').onclick = () => download(strToU8(JSON.stringify({settings:S, presets:lsGet(LS_PRESETS,[])}, null, 2)), baseName()+'_settings.json', 'application/json');
+document.getElementById('loadJsonBtn').onclick = () => document.getElementById('loadJson').click();
+document.getElementById('loadJson').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try { const j = JSON.parse(await f.text()); Object.assign(S, j.settings || j); if (j.presets) lsSet(LS_PRESETS, j.presets); syncForm(); fillPresets(); lsSet(LS_KEY, S); schedule(); }
+  catch(err){ alert('Not a valid settings file.'); }
+};
+document.getElementById('resetDefaults').onclick = () => { Object.assign(S, defaults()); syncForm(); fillPresets(); lsSet(LS_KEY, S); schedule(); };
+
+buildForm(); syncForm(); fillPresets(); resize3d(); run();
+window.__deboss = { S, generate, parseSvg, loadSvgText, meshCheck, logoPolys, buildStack, contoursOf, OFF, U, D, clean, stlBinary, threeMF, centreOnBed, meshBounds, get R(){ return R; } };
+</script>
+</body>
+</html>
